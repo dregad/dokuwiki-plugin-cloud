@@ -4,9 +4,15 @@
  *
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
  * @author     Esther Brunner <wikidesign@gmail.com>
+ *
+ * @noinspection PhpMissingFieldTypeInspection
+ * @noinspection PhpMissingReturnTypeInspection
+ * @noinspection PhpUnused
  */
 
 use dokuwiki\File\PageResolver;
+use dokuwiki\Search\Collection\PageFulltextCollection;
+use dokuwiki\Utf8\PhpString;
 
 class syntax_plugin_cloud extends DokuWiki_Syntax_Plugin {
     protected $knownFlags = array('showCount');
@@ -197,7 +203,7 @@ class syntax_plugin_cloud extends DokuWiki_Syntax_Plugin {
         // Remove to short words
         $min = $this->getConf('minimum_word_length');
         foreach ($cloud as $key => $count) {
-            if (iconv_strlen($key) < $min)
+            if (PhpString::strlen($key) < $min)
                 unset($cloud[$key]);
         }
 
@@ -227,11 +233,19 @@ class syntax_plugin_cloud extends DokuWiki_Syntax_Plugin {
      * Returns the sorted word cloud array
      */
     function _getWordCloud($num, &$min, &$max) {
-        global $conf;
+        global $conf, $updateVersion;
 
         $cloud = array();
 
-        if (@file_exists($conf['indexdir'].'/page.idx')) { // new word-length based index
+        if ($updateVersion >= 57 /* Mort and later */) {
+            $words = new PageFulltextCollection();
+            msg('Mort');
+
+            /** @noinspection PhpUnhandledExceptionInspection */
+            $cloud = $words->histogram(1, 0, $this->getConf('minimum_word_length'));
+        }
+        // Compatibility with Librarian and older (legacy index)
+        elseif (@file_exists($conf['indexdir'].'/page.idx')) { // new word-length based index
             require_once(DOKU_INC.'inc/indexer.php');
 
             $lengths = idx_indexLengths(0);
@@ -288,12 +302,12 @@ class syntax_plugin_cloud extends DokuWiki_Syntax_Plugin {
 
         // sort by frequency, then alphabetically
         arsort($cloud);
-        $cloud = array_chunk($cloud, $num, true);
-        $max = current($cloud[0]);
-        $min = end($cloud[0]);
-        ksort($cloud[0]);
+        $cloud = array_slice($cloud, 0, $num, true);
+        $max = current($cloud);
+        $min = end($cloud);
+        ksort($cloud);
 
-        return $cloud[0];
+        return $cloud;
     }
 }
 // vim:ts=4:sw=4:et:
